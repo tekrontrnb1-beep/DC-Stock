@@ -182,26 +182,38 @@ ord_dates = sorted(set(o['date'] for o in orders))
 n_order_days = max(1, len(ord_dates))
 print('  order rows:', len(orders), ' outbound rows:', len(sales), ' order days:', n_order_days, ord_dates[:1], '→', ord_dates[-1:])
 
-# ---------------- RETAIL SALES total (qty per barcode) — олон файл нэмж болно ----------------
-retail = {}
+# ---------------- SALES (борлуулалт) — өдрийн дэлгэрэнгүй (огноо, бар код, тоо) ----------------
+def find_col(fieldnames, names):
+    low = {str(f).strip().lower(): f for f in (fieldnames or [])}
+    for n in names:
+        if n.lower() in low: return low[n.lower()]
+    return None
+
+retail = {}        # total qty per code (нийт)
+sales_agg = {}     # (date, code) -> qty  (өдрийн)
 sales_files = find_all('Sales*.csv')
 for rp in sales_files:
     with open(rp, encoding='utf-8-sig', newline='') as f:
-        r = csv.reader(f); next(r, None)
-        for row in r:
-            if len(row) < 3: continue
-            retail[bc(row[0])] = retail.get(bc(row[0]), 0.0) + numf(row[2])
-retail_period = ''
-retail_days = 30
+        r = csv.DictReader(f)
+        c_date = find_col(r.fieldnames, ['Огноо', 'огноо', 'date', 'ORDER_DATE'])
+        c_bar = find_col(r.fieldnames, ['Бар код', 'Баркод', 'barcode', 'код'])
+        c_qty = find_col(r.fieldnames, ['Нийт тоо', 'тоо', 'борлуулалт', 'qty', 'quantity', 'sold'])
+        if not c_bar or not c_qty:
+            print('  ! sales: багана олдсонгүй —', os.path.basename(rp)); continue
+        for d in r:
+            code = bc(d.get(c_bar)); q = numf(d.get(c_qty))
+            if not code: continue
+            retail[code] = retail.get(code, 0.0) + q
+            ds = str(d.get(c_date) or '').strip()[:10] if c_date else ''
+            if re.match(r'^\d{4}-\d{2}-\d{2}$', ds):
+                sales_agg[(ds, code)] = sales_agg.get((ds, code), 0.0) + q
+sales_dates = sorted(set(k[0] for k in sales_agg))
+n_sales_days = max(1, len(sales_dates))
+mmdd = lambda s: s[5:7] + '.' + s[8:10]
+retail_period = (mmdd(sales_dates[0]) + '–' + mmdd(sales_dates[-1])) if sales_dates else ''
 if sales_files:
-    pm = re.search(r'(\d{1,2})\.(\d{1,2})\s*-\s*(\d{1,2})\.(\d{1,2})', ' '.join(os.path.basename(f) for f in sales_files))
-    if pm:
-        retail_period = '%s.%s–%s.%s' % (pm.group(1), pm.group(2), pm.group(3), pm.group(4))
-        from datetime import date
-        d1 = date(YEAR, int(pm.group(1)), int(pm.group(2))); d2 = date(YEAR, int(pm.group(3)), int(pm.group(4)))
-        retail_days = (d2 - d1).days + 1
-        if retail_days < 1: retail_days = 30
-    print('· retail sales files:', [os.path.basename(f) for f in sales_files], 'items:', len(retail), 'period:', retail_period, 'days:', retail_days)
+    print('· sales files:', [os.path.basename(f) for f in sales_files], 'items:', len(retail),
+          'daily rows:', len(sales_agg), 'days:', n_sales_days, 'period:', retail_period)
 
 # ---------------- BUILD PRODUCTS (universe = balance-having AND registered in V9001) ----------------
 # Үлдэгдэл файл олон агуулахын бараа агуулдаг тул V9001-д (9001 master) бүртгэлтэйг нь л үлдээнэ.
@@ -218,7 +230,7 @@ for code in sorted(universe):
     if code in abcx: ma += 1
     if code in status9001: ms += 1
     retailQty = retail.get(code, 0.0)
-    avgRetail = round(retailQty / retail_days, 3) if retail_days else 0.0    # өдрийн дундаж БОРЛУУЛАЛТ (Sales.csv)
+    avgRetail = round(retailQty / n_sales_days, 3) if n_sales_days else 0.0  # өдрийн дундаж БОРЛУУЛАЛТ (Sales.csv)
     avgOut = round(avg_out.get(code, 0.0), 3)                                # өдрийн дундаж гаралт (Үлдэгдэл файл) — ирээдүйд
     avgO = round(code_oq.get(code, 0.0) / n_order_days, 3)                   # өдрийн дундаж захиалга
     products.append({
@@ -238,22 +250,23 @@ for code in sorted(universe):
     })
 
 balances = [b for b in balances if b['code'] in universe]
-sales = [s for s in sales if s['code'] in universe]
 orders = [o for o in orders if o['code'] in universe]
+# Борлуулалт — өдрийн (огноо, код, тоо), universe-ээр шүүсэн
+sales_daily = [{'date': dt, 'code': cd, 'qty': int(round(q))} for (dt, cd), q in sales_agg.items() if q and cd in universe]
 
 print('\n=== SUMMARY ===')
 print('  products (үлдэгдэлтэй):', len(products))
 print('   - matched master   :', mm, '(%.0f%%)' % (100 * mm / max(1, len(products))))
 print('   - matched abc/xyz  :', ma, '(%.0f%%)' % (100 * ma / max(1, len(products))))
 print('   - matched 9001 stat:', ms, '(%.0f%%)' % (100 * ms / max(1, len(products))))
-print('  balances:', len(balances), ' sales(outbound):', len(sales), ' orders:', len(orders))
+print('  balances:', len(balances), ' sales(борлуулалт өдрийн):', len(sales_daily), ' orders:', len(orders))
 
 DB = {
-    'products': products, 'balances': balances, 'sales': [], 'orders': orders,
+    'products': products, 'balances': balances, 'sales': sales_daily, 'orders': orders,
     'updatedAt': UPDATED,
     'meta': {'source': 'DC-Stock ETL', 'value': 'cost (Өртөг үнэ)',
-             'sales': 'retail (Sales.csv, period total per item)', 'universe': 'V9001 + balance',
-             'retailPeriod': retail_period, 'balanceDates': bal_dates},
+             'sales': 'retail daily (Sales.csv: огноо/бар код/тоо)', 'universe': 'V9001 + balance',
+             'retailPeriod': retail_period, 'salesDays': n_sales_days, 'balanceDates': bal_dates},
 }
 
 # ---------------- WRITE plaintext + encrypted ----------------

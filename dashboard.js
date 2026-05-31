@@ -588,14 +588,15 @@ function renderKPIs() {
   let ordSum = 0, ordAmt = 0;
   for (const o of DB.orders) { if (o.date > monthStart && o.date <= S.selDate && codes.has(o.code)) { ordSum += o.qty; ordAmt += (o.amount || 0); } }
   const avgOrdersDaily = ordSum / nOrdDays;
-  // Борлуулалт (жижиглэн Sales.csv) — period-total тул өдрийн дундаж = нийт ÷ тухайн хугацааны хоног.
-  const retailTotal = list.reduce((s, p) => s + (p.salesPeriodQty || 0), 0);
-  const retailPeriod = (DB.meta && DB.meta.retailPeriod) ? DB.meta.retailPeriod : '';
-  const rDays = retailDays();
-  const avgRetailDaily = rDays ? retailTotal / rDays : 0;
-  const ordRangeLabel = ordRangeDates.length
-    ? `${fmtDate(ordRangeDates[0])}–${fmtDate(ordRangeDates[ordRangeDates.length - 1])} · ${nOrdDays} өдөр`
-    : 'мэдээлэл алга';
+  // Борлуулалт — одоо ӨДРИЙН өгөгдөлтэй тул захиалга шиг сонгосон огноогоор тооцоологдоно.
+  const salesRangeDates = IX.salesDates.filter(d => d > monthStart && d <= S.selDate);
+  const nSalesDays = salesRangeDates.length || 1;
+  let salesSum = 0;
+  for (const s of DB.sales) { if (s.date > monthStart && s.date <= S.selDate && codes.has(s.code)) salesSum += s.qty; }
+  const avgRetailDaily = salesSum / nSalesDays;
+  const rangeLabel = (ds) => ds.length ? `${fmtDate(ds[0])}–${fmtDate(ds[ds.length - 1])} · ${ds.length} өдөр` : 'мэдээлэл алга';
+  const ordRangeLabel = rangeLabel(ordRangeDates);
+  const salesRangeLabel = rangeLabel(salesRangeDates);
 
   const deltaHtml = (d) => {
     if (!d) return '<span style="color:var(--text-3)">өөрчлөлтгүй</span>';
@@ -609,7 +610,7 @@ function renderKPIs() {
     { cls: 'green', label: '💰 Нөөцийн үнэ (өртөг)', value: moneyShort(totalVal), sub: deltaHtml(valDelta) },
     { cls: 'violet', label: '⏳ Дундаж нөөц хоног', value: avgCover == null ? '—' : fmtDays(avgCover) + ' хоног', sub: 'борлуулалтаар (жигнэсэн)' },
     { cls: low ? 'red' : 'green', key: 'low', label: '⚠️ Анхаарах бараа', value: fmtInt(low), sub: `${fmtInt(zero)} нь дууссан · харах →` },
-    { cls: 'amber', label: '🛒 Өдрийн дундаж борлуулалт', value: fmtInt(avgRetailDaily) + ' ш/өдөр', sub: `жижиглэн · ${esc(retailPeriod || 'нийт')}` },
+    { cls: 'amber', label: '🛒 Өдрийн дундаж борлуулалт', value: fmtInt(avgRetailDaily) + ' ш/өдөр', sub: salesRangeLabel },
     { cls: '', label: '📋 Өдрийн дундаж захиалга', value: fmtInt(avgOrdersDaily) + ' ш/өдөр', sub: ordRangeLabel },
   ];
   $('kpis').innerHTML = cards.map(c => `
@@ -869,12 +870,14 @@ function openProduct(code) {
       ${p.salesPeriodQty ? `<div class="m"><div class="l">Жижиглэн борл. (нийт)</div><div class="v">${fmtInt(p.salesPeriodQty)} ш</div></div>` : ''}
     </div>
     <div class="pd-chart"><canvas id="pd-canvas"></canvas></div>
-    <div class="hint" style="text-align:center">Сүүлийн ${dates.length} өдрийн үлдэгдэл ба салбарын захиалга</div>`;
+    <div class="hint" style="text-align:center">Сүүлийн ${dates.length} өдрийн үлдэгдэл · борлуулалт · захиалга</div>`;
   showOverlay();
   const balSeries = dates.map(dt => { const q = balanceAsOf(code, dt); return q == null ? null : q; });
+  const salesSeries = dates.map(dt => salesOn(code, dt).qty);
   const orderSeries = dates.map(dt => ordersOn(code, dt).qty);
   drawLine($('pd-canvas'), dates.map(fmtDate), [
     { label: 'Үлдэгдэл', data: balSeries, color: '#2563eb', fill: true },
+    { label: 'Борлуулалт', data: salesSeries, color: '#16a34a', fill: false },
     { label: 'Захиалга', data: orderSeries, color: '#d97706', fill: false },
   ], h => h);
 }
