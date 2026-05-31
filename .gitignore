@@ -16,3 +16,6 @@ data/stock-data.json
 
 # Secrets — never commit (local only)
 token.txt
+
+# Claude handoff note (local only)
+CLAUDE.md
