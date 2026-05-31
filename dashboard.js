@@ -70,6 +70,22 @@ function fmtDateFull(s) {
   const [y, m, d] = s.split('-').map(Number);
   return `${y} оны ${m}-р сарын ${d}`;
 }
+/* add n days to a 'YYYY-MM-DD' string */
+function addDays(s, n) {
+  const [y, m, d] = s.split('-').map(Number);
+  const dt = new Date(y, m - 1, d); dt.setDate(dt.getDate() + n);
+  return ymd(dt);
+}
+/* number of days in the retail (Sales.csv) period from meta.retailPeriod "MM.DD–MM.DD" */
+function retailDays() {
+  const p = DB.meta && DB.meta.retailPeriod;
+  if (!p) return 30;
+  const m = p.match(/(\d{1,2})\.(\d{1,2}).*?(\d{1,2})\.(\d{1,2})/);
+  if (!m) return 30;
+  const y = +(S.selDate || '2026').slice(0, 4);
+  const diff = Math.round((new Date(y, +m[3] - 1, +m[4]) - new Date(y, +m[1] - 1, +m[2])) / 86400000) + 1;
+  return diff > 0 ? diff : 30;
+}
 
 /* Parse many date formats / Excel serials → 'YYYY-MM-DD' */
 function toYmd(v) {
@@ -564,12 +580,22 @@ function renderKPIs() {
   const avgCover = totalAvgSales > 0 ? totalQty / totalAvgSales : null;
   const low = list.filter(p => p.low).length;
   const zero = list.filter(p => p.qty === 0).length;
-  // Салбарын захиалга — өдрийн урсгал (сүүлийн боломжит өдрөөр). Борлуулалт — жижиглэн Sales.csv нийт.
-  const oDate = latestWith(IX.orderDates, S.selDate);
-  let todayOrders = 0, todayOrdersAmt = 0;
-  if (oDate) for (const p of list) { const o = ordersOn(p.code, oDate); todayOrders += o.qty; todayOrdersAmt += o.amount; }
+  // Өдрийн дундаж — шүүсэн бараануудын, сонгосон огноо хүртэлх сүүлийн ~сарын (30 хоног) дундаж.
+  const codes = new Set(list.map(p => p.code));
+  const monthStart = addDays(S.selDate, -30);
+  const ordRangeDates = IX.orderDates.filter(d => d > monthStart && d <= S.selDate);
+  const nOrdDays = ordRangeDates.length || 1;
+  let ordSum = 0, ordAmt = 0;
+  for (const o of DB.orders) { if (o.date > monthStart && o.date <= S.selDate && codes.has(o.code)) { ordSum += o.qty; ordAmt += (o.amount || 0); } }
+  const avgOrdersDaily = ordSum / nOrdDays;
+  // Борлуулалт (жижиглэн Sales.csv) — period-total тул өдрийн дундаж = нийт ÷ тухайн хугацааны хоног.
   const retailTotal = list.reduce((s, p) => s + (p.salesPeriodQty || 0), 0);
-  const retailPeriod = (DB.meta && DB.meta.retailPeriod) ? DB.meta.retailPeriod : 'жижиглэн нийт';
+  const retailPeriod = (DB.meta && DB.meta.retailPeriod) ? DB.meta.retailPeriod : '';
+  const rDays = retailDays();
+  const avgRetailDaily = rDays ? retailTotal / rDays : 0;
+  const ordRangeLabel = ordRangeDates.length
+    ? `${fmtDate(ordRangeDates[0])}–${fmtDate(ordRangeDates[ordRangeDates.length - 1])} · ${nOrdDays} өдөр`
+    : 'мэдээлэл алга';
 
   const deltaHtml = (d) => {
     if (!d) return '<span style="color:var(--text-3)">өөрчлөлтгүй</span>';
@@ -583,8 +609,8 @@ function renderKPIs() {
     { cls: 'green', label: '💰 Нөөцийн үнэ (өртөг)', value: moneyShort(totalVal), sub: deltaHtml(valDelta) },
     { cls: 'violet', label: '⏳ Дундаж нөөц хоног', value: avgCover == null ? '—' : fmtDays(avgCover) + ' хоног', sub: 'гаралтаар (жигнэсэн)' },
     { cls: low ? 'red' : 'green', key: 'low', label: '⚠️ Анхаарах бараа', value: fmtInt(low), sub: `${fmtInt(zero)} нь дууссан · харах →` },
-    { cls: 'amber', label: '🛒 Борлуулалт (нийт)', value: fmtInt(retailTotal) + ' ш', sub: `жижиглэн · ${esc(retailPeriod)}` },
-    { cls: '', label: '📋 Салбарын захиалга', value: fmtInt(todayOrders) + ' ш', sub: oDate ? `${fmtDate(oDate)} · ${moneyShort(todayOrdersAmt)}` : 'мэдээлэл алга' },
+    { cls: 'amber', label: '🛒 Өдрийн дундаж борлуулалт', value: fmtInt(avgRetailDaily) + ' ш/өдөр', sub: `жижиглэн · ${esc(retailPeriod || 'нийт')}` },
+    { cls: '', label: '📋 Өдрийн дундаж захиалга', value: fmtInt(avgOrdersDaily) + ' ш/өдөр', sub: ordRangeLabel },
   ];
   $('kpis').innerHTML = cards.map(c => `
     <div class="kpi ${c.cls}${c.key === 'low' ? ' clickable' + (S.lowOnly ? ' active' : '') : ''}"${c.key ? ` data-kpi="${c.key}"` : ''}>
@@ -596,7 +622,6 @@ function renderKPIs() {
   if (lowCard) lowCard.onclick = () => {
     S.lowOnly = !S.lowOnly;
     render();
-    if (S.lowOnly) document.querySelector('#prod-table').scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 }
 
@@ -648,7 +673,6 @@ function renderMatrix() {
   $('matrix').querySelectorAll('.mx-cell').forEach(c => c.onclick = () => {
     S.cls = (S.cls === c.dataset.cls) ? '' : c.dataset.cls;
     render();
-    document.querySelector('#prod-table').scrollIntoView({ behavior: 'smooth', block: 'start' });
   });
 }
 
