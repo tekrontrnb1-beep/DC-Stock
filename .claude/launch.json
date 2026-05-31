@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "dc-stock",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "5546"],
+      "port": 5546
+    }
+  ]
+}

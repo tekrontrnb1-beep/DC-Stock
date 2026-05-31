@@ -1,0 +1,15 @@
+# OS / editor
+Thumbs.db
+.DS_Store
+*.log
+
+# Claude Code local
+.claude/settings.local.json
+
+# Raw import spreadsheets (source data — don't commit)
+import/
+*.xlsx
+*.xls
+
+# Plaintext data — local working copy only. Publish the encrypted .enc instead.
+data/stock-data.json

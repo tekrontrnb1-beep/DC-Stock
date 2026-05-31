@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="mn" translate="no">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="google" content="notranslate" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#2563eb" />
+  <title>DC-Stock — Нөөцийн самбар</title>
+  <link rel="icon" href="icon.svg" type="image/svg+xml" />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="apple-touch-icon" href="icon-192.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="DC-Stock" />
+  <link rel="stylesheet" href="dashboard.css" />
+</head>
+<body>
+  <!-- Top bar -->
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark">DC</div>
+      <div class="brand-text">
+        <div class="brand-title">Нөөцийн самбар</div>
+        <div class="brand-sub" id="data-status">Ачааллаж байна…</div>
+      </div>
+    </div>
+    <div class="top-actions">
+      <span class="as-of" id="as-of"></span>
+      <button class="btn ghost" id="btn-import" title="Excel / CSV импорт">⬆️ Импорт</button>
+      <button class="btn" id="btn-publish" title="Өгөгдлийг нийтлэх">📤 Нийтлэх</button>
+    </div>
+  </header>
+
+  <!-- Filters -->
+  <div class="toolbar" id="toolbar">
+    <div class="field">
+      <label>Огноо (байдлаар)</label>
+      <select id="f-date"></select>
+    </div>
+    <div class="field">
+      <label>Хэлтэс</label>
+      <select id="f-dept"><option value="">Бүгд</option></select>
+    </div>
+    <div class="field">
+      <label>ABC/XYZ</label>
+      <select id="f-class"><option value="">Бүгд</option></select>
+    </div>
+    <div class="field">
+      <label>Нийлүүлэгчийн төлөв</label>
+      <select id="f-status"><option value="">Бүгд</option></select>
+    </div>
+    <div class="field">
+      <label>Захих төлөв</label>
+      <select id="f-status2"><option value="">Бүгд</option></select>
+    </div>
+    <div class="field grow">
+      <label>Хайх</label>
+      <input id="f-search" placeholder="Барааны нэр эсвэл код…" autocomplete="off" />
+    </div>
+    <button class="btn ghost" id="f-reset">↺ Цэвэрлэх</button>
+  </div>
+
+  <main class="content" id="content">
+    <!-- KPI cards -->
+    <section class="kpis" id="kpis"></section>
+
+    <div class="grid-2">
+      <!-- ABC / XYZ matrix -->
+      <section class="card">
+        <div class="card-head">
+          <h2>ABC / XYZ — 9 ангилал</h2>
+          <div class="seg" id="matrix-metric">
+            <button class="seg-btn active" data-v="value">Үнэ</button>
+            <button class="seg-btn" data-v="coverSales">Нөөц хоног (борл.)</button>
+            <button class="seg-btn" data-v="coverOrders">Нөөц (зах.)</button>
+          </div>
+        </div>
+        <div class="matrix" id="matrix"></div>
+        <div class="hint" id="matrix-hint" style="margin-top:8px"></div>
+        <div class="matrix-foot">
+          <span><b>ABC</b> — үнийн ач холбогдол (A&gt;B&gt;C)</span>
+          <span><b>XYZ</b> — эрэлтийн тогтвортой байдал (X тогтвортой → Z тогтворгүй)</span>
+        </div>
+      </section>
+
+      <!-- Departments -->
+      <section class="card">
+        <div class="card-head">
+          <h2>Хэлтсийн үлдэгдэл</h2>
+          <span class="hint" id="dept-hint"></span>
+        </div>
+        <div class="dept-list" id="dept-list"></div>
+      </section>
+    </div>
+
+    <!-- History -->
+    <section class="card">
+      <div class="card-head">
+        <h2>Түүх</h2>
+        <div class="hist-controls">
+          <select id="hist-scope" title="Юуны түүх"></select>
+          <div class="seg" id="hist-metric">
+            <button class="seg-btn active" data-v="balance">Үлдэгдэл</button>
+            <button class="seg-btn" data-v="sales">Борлуулалт</button>
+            <button class="seg-btn" data-v="orders">Захиалга</button>
+          </div>
+          <select id="hist-range" title="Хугацаа">
+            <option value="7">7 хоног</option>
+            <option value="30" selected>30 хоног</option>
+            <option value="90">90 хоног</option>
+            <option value="0">Бүгд</option>
+          </select>
+        </div>
+      </div>
+      <div class="chart-wrap"><canvas id="hist-chart"></canvas></div>
+    </section>
+
+    <!-- Products -->
+    <section class="card">
+      <div class="card-head">
+        <h2>Бараа (<span id="prod-count">0</span>)</h2>
+        <span class="hint">Мөр дээр дарж дэлгэрэнгүй түүхийг харна</span>
+      </div>
+      <div class="table-wrap">
+        <table class="data-table" id="prod-table">
+          <thead>
+            <tr>
+              <th data-sort="code">Код</th>
+              <th data-sort="name">Нэр</th>
+              <th data-sort="department">Хэлтэс</th>
+              <th data-sort="cls" class="center">ABC/XYZ</th>
+              <th data-sort="status">Нийлүүл. төлөв</th>
+              <th data-sort="status2">Захих төлөв</th>
+              <th data-sort="qty" class="num">Өнөөдрийн үлдэгдэл</th>
+              <th data-sort="delta" class="num">Өчигдрөөс</th>
+              <th data-sort="value" class="num">Үнийн дүн (өртөг)</th>
+              <th data-sort="coverSales" class="num">Нөөц хоног (борл.)</th>
+              <th data-sort="coverOrders" class="num">Нөөц хоног (зах.)</th>
+            </tr>
+          </thead>
+          <tbody id="prod-tbody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Empty state -->
+    <section class="empty-state" id="empty-state" hidden>
+      <div class="es-ico">📦</div>
+      <h2>Өгөгдөл алга байна</h2>
+      <p>Excel/CSV файлаа импортлох, эсвэл жишээ өгөгдлөөр самбарыг туршиж үзээрэй.</p>
+      <div class="es-actions">
+        <button class="btn" id="es-import">⬆️ Импорт хийх</button>
+        <button class="btn ghost" id="es-sample">✨ Жишээ өгөгдөл үзэх</button>
+      </div>
+    </section>
+  </main>
+
+  <footer class="foot">
+    DC-Stock · Нөөцийн самбар · өгөгдөл зөвхөн таны төхөөрөмжид хадгалагдана (нийтлэх хүртэл)
+    · <a href="?demo" style="color:var(--accent)">🧪 Жишээ загвар туршиж үзэх</a>
+  </footer>
+
+  <!-- Modal -->
+  <div class="overlay" id="overlay" hidden>
+    <div class="modal" id="modal">
+      <div class="modal-head">
+        <h3 id="modal-title">—</h3>
+        <button class="modal-close" id="modal-close">✕</button>
+      </div>
+      <div class="modal-body" id="modal-body"></div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div class="toast" id="toast" hidden></div>
+
+  <!-- Passcode gate (shown when data is encrypted) -->
+  <div class="gate" id="gate" hidden>
+    <div class="gate-card">
+      <div class="gate-mark">DC</div>
+      <h2>Нөөцийн самбар</h2>
+      <p>Энэ өгөгдөл нууцлагдсан. Үзэхийн тулд нууц кодоо оруулна уу.</p>
+      <input type="password" id="gate-input" placeholder="Нууц код" autocomplete="current-password" />
+      <div class="gate-err" id="gate-err" hidden></div>
+      <button class="btn" id="gate-btn">🔓 Нээх</button>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="dashboard.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+    }
+  </script>
+</body>
+</html>
