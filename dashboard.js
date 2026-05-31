@@ -1048,8 +1048,6 @@ function wire() {
     renderTable();
   });
 
-  $('btn-import').onclick = openImport;
-  $('btn-publish').onclick = openPublish;
   $('es-import').onclick = openImport;
   $('es-sample').onclick = () => {
     DB = buildSample(); saveLocal(); S.source = 'sample';

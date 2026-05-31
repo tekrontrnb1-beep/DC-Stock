@@ -1,6 +1,6 @@
 /* DC-Stock — service worker. Network-first for same-origin so updates appear
    immediately online; falls back to cache when offline (incl. the encrypted data). */
-const CACHE = 'dc-stock-v3';
+const CACHE = 'dc-stock-v4';
 const ASSETS = [
   './', './index.html', './dashboard.css', './dashboard.js',
   './manifest.json', './icon.svg', './icon-192.png', './icon-512.png',
