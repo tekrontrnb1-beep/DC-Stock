@@ -221,7 +221,6 @@ for code in sorted(universe):
     avgRetail = round(retailQty / retail_days, 3) if retail_days else 0.0    # өдрийн дундаж БОРЛУУЛАЛТ (Sales.csv)
     avgOut = round(avg_out.get(code, 0.0), 3)                                # өдрийн дундаж гаралт (Үлдэгдэл файл) — ирээдүйд
     avgO = round(code_oq.get(code, 0.0) / n_order_days, 3)                   # өдрийн дундаж захиалга
-    rate = avgRetail if avgRetail > 0 else avgOut                            # minStock-д: борлуулалт, байхгүй бол гаралт
     products.append({
         'code': code,
         'name': m.get('name') or bal_name.get(code) or code,
@@ -233,7 +232,7 @@ for code in sorted(universe):
         'price': round(m.get('cost', 0.0), 2),           # COST — used for inventory value
         'sellPrice': round(m.get('sell', 0.0), 2),
         'unit': 'ш',
-        'minStock': int(round(rate * 3)) if rate else 0,
+        'minStock': int(round(avgRetail * 3)) if avgRetail else 0,
         'avgSales': avgRetail, 'avgOrders': avgO, 'avgOut': avgOut,
         'salesPeriodQty': int(round(retailQty)) if code in retail else 0,
     })
