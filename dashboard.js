@@ -607,7 +607,7 @@ function renderKPIs() {
     { cls: 'violet', label: '📦 Нийт бараа', value: fmtInt(list.length), sub: `${IX.departments.length} Department` },
     { cls: '', label: '🧮 Өнөөдрийн нийт үлдэгдэл', value: fmtInt(totalQty) + ' ш', sub: `${fmtInt(withQty.length)} нэр төрөл` },
     { cls: 'green', label: '💰 Нөөцийн үнэ (өртөг)', value: moneyShort(totalVal), sub: deltaHtml(valDelta) },
-    { cls: 'violet', label: '⏳ Дундаж нөөц хоног', value: avgCover == null ? '—' : fmtDays(avgCover) + ' хоног', sub: 'гаралтаар (жигнэсэн)' },
+    { cls: 'violet', label: '⏳ Дундаж нөөц хоног', value: avgCover == null ? '—' : fmtDays(avgCover) + ' хоног', sub: 'борлуулалтаар (жигнэсэн)' },
     { cls: low ? 'red' : 'green', key: 'low', label: '⚠️ Анхаарах бараа', value: fmtInt(low), sub: `${fmtInt(zero)} нь дууссан · харах →` },
     { cls: 'amber', label: '🛒 Өдрийн дундаж борлуулалт', value: fmtInt(avgRetailDaily) + ' ш/өдөр', sub: `жижиглэн · ${esc(retailPeriod || 'нийт')}` },
     { cls: '', label: '📋 Өдрийн дундаж захиалга', value: fmtInt(avgOrdersDaily) + ' ш/өдөр', sub: ordRangeLabel },
@@ -860,9 +860,9 @@ function openProduct(code) {
     <div class="pd-meta">
       <div class="m"><div class="l">Өнөөдрийн үлдэгдэл</div><div class="v">${e.qty == null ? '—' : fmtInt(e.qty) + ' ' + esc(p.unit)}</div></div>
       <div class="m"><div class="l">Үнийн дүн (өртөг)</div><div class="v">${e.value == null ? '—' : moneyShort(e.value)}</div></div>
-      <div class="m"><div class="l">Нөөц хоног (гаралт)</div><div class="v">${fmtDays(e.coverSales)}</div></div>
+      <div class="m"><div class="l">Нөөц хоног (борлуулалт)</div><div class="v">${fmtDays(e.coverSales)}</div></div>
       <div class="m"><div class="l">Нөөц хоног (зах.)</div><div class="v">${fmtDays(e.coverOrders)}</div></div>
-      <div class="m"><div class="l">Өдрийн дундаж гаралт</div><div class="v">${p.avgSales ? p.avgSales.toFixed(1) : '—'}</div></div>
+      <div class="m"><div class="l">Өдрийн дундаж борлуулалт</div><div class="v">${p.avgSales ? p.avgSales.toFixed(1) : '—'}</div></div>
       <div class="m"><div class="l">Өдрийн дундаж захиалга</div><div class="v">${p.avgOrders ? p.avgOrders.toFixed(1) : '—'}</div></div>
       <div class="m"><div class="l">Өртөг үнэ</div><div class="v">${money(p.price)}</div></div>
       <div class="m"><div class="l">Худалдах үнэ</div><div class="v">${p.sellPrice ? money(p.sellPrice) : '—'}</div></div>

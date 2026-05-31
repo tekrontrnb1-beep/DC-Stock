@@ -192,10 +192,16 @@ for rp in sales_files:
             if len(row) < 3: continue
             retail[bc(row[0])] = retail.get(bc(row[0]), 0.0) + numf(row[2])
 retail_period = ''
+retail_days = 30
 if sales_files:
-    pm = re.search(r'(\d{1,2}\.\d{1,2})\s*-\s*(\d{1,2}\.\d{1,2})', ' '.join(os.path.basename(f) for f in sales_files))
-    if pm: retail_period = pm.group(1) + '–' + pm.group(2)
-    print('· retail sales files:', [os.path.basename(f) for f in sales_files], 'items:', len(retail), 'period:', retail_period)
+    pm = re.search(r'(\d{1,2})\.(\d{1,2})\s*-\s*(\d{1,2})\.(\d{1,2})', ' '.join(os.path.basename(f) for f in sales_files))
+    if pm:
+        retail_period = '%s.%s–%s.%s' % (pm.group(1), pm.group(2), pm.group(3), pm.group(4))
+        from datetime import date
+        d1 = date(YEAR, int(pm.group(1)), int(pm.group(2))); d2 = date(YEAR, int(pm.group(3)), int(pm.group(4)))
+        retail_days = (d2 - d1).days + 1
+        if retail_days < 1: retail_days = 30
+    print('· retail sales files:', [os.path.basename(f) for f in sales_files], 'items:', len(retail), 'period:', retail_period, 'days:', retail_days)
 
 # ---------------- BUILD PRODUCTS (universe = balance-having AND registered in V9001) ----------------
 # Үлдэгдэл файл олон агуулахын бараа агуулдаг тул V9001-д (9001 master) бүртгэлтэйг нь л үлдээнэ.
@@ -211,8 +217,11 @@ for code in sorted(universe):
     if code in master: mm += 1
     if code in abcx: ma += 1
     if code in status9001: ms += 1
-    avgS = round(avg_out.get(code, 0.0), 3)              # avg daily outbound (борлуулалт)
-    avgO = round(code_oq.get(code, 0.0) / n_order_days, 3)  # avg daily branch order (захиалга)
+    retailQty = retail.get(code, 0.0)
+    avgRetail = round(retailQty / retail_days, 3) if retail_days else 0.0    # өдрийн дундаж БОРЛУУЛАЛТ (Sales.csv)
+    avgOut = round(avg_out.get(code, 0.0), 3)                                # өдрийн дундаж гаралт (Үлдэгдэл файл) — ирээдүйд
+    avgO = round(code_oq.get(code, 0.0) / n_order_days, 3)                   # өдрийн дундаж захиалга
+    rate = avgRetail if avgRetail > 0 else avgOut                            # minStock-д: борлуулалт, байхгүй бол гаралт
     products.append({
         'code': code,
         'name': m.get('name') or bal_name.get(code) or code,
@@ -224,9 +233,9 @@ for code in sorted(universe):
         'price': round(m.get('cost', 0.0), 2),           # COST — used for inventory value
         'sellPrice': round(m.get('sell', 0.0), 2),
         'unit': 'ш',
-        'minStock': int(round(avgS * 3)) if avgS else 0,
-        'avgSales': avgS, 'avgOrders': avgO,
-        'salesPeriodQty': int(round(retail.get(code, 0))) if code in retail else 0,
+        'minStock': int(round(rate * 3)) if rate else 0,
+        'avgSales': avgRetail, 'avgOrders': avgO, 'avgOut': avgOut,
+        'salesPeriodQty': int(round(retailQty)) if code in retail else 0,
     })
 
 balances = [b for b in balances if b['code'] in universe]
