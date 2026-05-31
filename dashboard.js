@@ -446,15 +446,37 @@ function enrich(p) {
   const sales = salesOn(p.code, d).qty;
   const orders = ordersOn(p.code, d).qty;
   const low = qty != null && (qty <= 0 || (p.minStock > 0 && qty <= p.minStock));
-  // Нөөц хоног (эргэц) = өнөөдрийн үлдэгдэл / өдрийн дундаж зарцуулалт (борлуулалт ба захиалгаар)
-  const coverSales = (qty != null && p.avgSales > 0) ? qty / p.avgSales : null;
-  const coverOrders = (qty != null && p.avgOrders > 0) ? qty / p.avgOrders : null;
-  return { ...p, qty, qtyPrev, delta, value, sales, orders, low, coverSales, coverOrders };
+  // Өдрийн дундаж зарцуулалт — сонгосон огноо хүртэлх сүүлийн ~сарын дата-аар (огноогоор хувирна)
+  const salesRate = RANGE.sales.get(p.code) || 0;   // борлуулалт/өдөр
+  const ordersRate = RANGE.orders.get(p.code) || 0; // захиалга/өдөр
+  // Нөөц хоног (эргэц) = өнөөдрийн үлдэгдэл / өдрийн дундаж зарцуулалт
+  const coverSales = (qty != null && salesRate > 0) ? qty / salesRate : null;
+  const coverOrders = (qty != null && ordersRate > 0) ? qty / ordersRate : null;
+  return { ...p, qty, qtyPrev, delta, value, sales, orders, low, salesRate, ordersRate, coverSales, coverOrders };
 }
 function fmtDays(n) {
   if (n == null) return '<span style="color:var(--text-3)">—</span>';
   if (n >= 999) return '999+';
   return (n < 10 ? n.toFixed(1) : Math.round(n).toString());
+}
+
+/* Өдрийн дундаж зарцуулалтын хурд — сонгосон огноо хүртэлх сүүлийн 30 хоногийн дата-аар (бараа тус бүрээр) */
+let RANGE = { sales: new Map(), orders: new Map(), sDates: [], oDates: [] };
+function computeRangeRates() {
+  if (!IX || !S.selDate) { RANGE = { sales: new Map(), orders: new Map(), sDates: [], oDates: [] }; return; }
+  // Тухайн сарын 1-нээс сонгосон өдөр хүртэл (month-to-date). Жнь 05-05 → 05-01..05-05.
+  const monthStart = S.selDate.slice(0, 7) + '-01';
+  const inRange = (d) => d >= monthStart && d <= S.selDate;
+  const sDates = IX.salesDates.filter(inRange);
+  const oDates = IX.orderDates.filter(inRange);
+  const nS = sDates.length || 1, nO = oDates.length || 1;
+  const sSum = new Map(), oSum = new Map();
+  for (const s of DB.sales) if (inRange(s.date)) sSum.set(s.code, (sSum.get(s.code) || 0) + s.qty);
+  for (const o of DB.orders) if (inRange(o.date)) oSum.set(o.code, (oSum.get(o.code) || 0) + o.qty);
+  const sR = new Map(), oR = new Map();
+  for (const [c, v] of sSum) sR.set(c, v / nS);
+  for (const [c, v] of oSum) oR.set(c, v / nO);
+  RANGE = { sales: sR, orders: oR, sDates, oDates };
 }
 
 /* ============================================================
@@ -535,6 +557,7 @@ function render() {
   $('toolbar').style.display = hasData ? '' : 'none';
   updateStatusBar();
   if (!hasData) return;
+  computeRangeRates();
   renderFilters();
   renderKPIs();
   renderMatrix();
@@ -576,27 +599,16 @@ function renderKPIs() {
   const totalVal = withQty.reduce((s, p) => s + (p.value || 0), 0);
   const totalValPrev = withQty.reduce((s, p) => s + ((p.qtyPrev != null ? p.qtyPrev : p.qty) * p.price), 0);
   const valDelta = totalVal - totalValPrev;
-  const totalAvgSales = withQty.reduce((s, p) => s + (p.avgSales || 0), 0);
+  const totalAvgSales = withQty.reduce((s, p) => s + (p.salesRate || 0), 0);
   const avgCover = totalAvgSales > 0 ? totalQty / totalAvgSales : null;
   const low = list.filter(p => p.low).length;
   const zero = list.filter(p => p.qty === 0).length;
-  // Өдрийн дундаж — шүүсэн бараануудын, сонгосон огноо хүртэлх сүүлийн ~сарын (30 хоног) дундаж.
-  const codes = new Set(list.map(p => p.code));
-  const monthStart = addDays(S.selDate, -30);
-  const ordRangeDates = IX.orderDates.filter(d => d > monthStart && d <= S.selDate);
-  const nOrdDays = ordRangeDates.length || 1;
-  let ordSum = 0, ordAmt = 0;
-  for (const o of DB.orders) { if (o.date > monthStart && o.date <= S.selDate && codes.has(o.code)) { ordSum += o.qty; ordAmt += (o.amount || 0); } }
-  const avgOrdersDaily = ordSum / nOrdDays;
-  // Борлуулалт — одоо ӨДРИЙН өгөгдөлтэй тул захиалга шиг сонгосон огноогоор тооцоологдоно.
-  const salesRangeDates = IX.salesDates.filter(d => d > monthStart && d <= S.selDate);
-  const nSalesDays = salesRangeDates.length || 1;
-  let salesSum = 0;
-  for (const s of DB.sales) { if (s.date > monthStart && s.date <= S.selDate && codes.has(s.code)) salesSum += s.qty; }
-  const avgRetailDaily = salesSum / nSalesDays;
+  // Өдрийн дундаж — шүүсэн бараа, сонгосон огноо хүртэлх сүүлийн ~сарын дата-аар (RANGE; огноо/филтерээр хувирна)
+  const avgRetailDaily = list.reduce((s, p) => s + (p.salesRate || 0), 0);
+  const avgOrdersDaily = list.reduce((s, p) => s + (p.ordersRate || 0), 0);
   const rangeLabel = (ds) => ds.length ? `${fmtDate(ds[0])}–${fmtDate(ds[ds.length - 1])} · ${ds.length} өдөр` : 'мэдээлэл алга';
-  const ordRangeLabel = rangeLabel(ordRangeDates);
-  const salesRangeLabel = rangeLabel(salesRangeDates);
+  const salesRangeLabel = rangeLabel(RANGE.sDates);
+  const ordRangeLabel = rangeLabel(RANGE.oDates);
 
   const deltaHtml = (d) => {
     if (!d) return '<span style="color:var(--text-3)">өөрчлөлтгүй</span>';
@@ -636,7 +648,7 @@ function renderMatrix() {
     const cell = cells[p.cls];
     if (!cell) { unclassified++; return; }
     cell.count++; cell.value += (p.value || 0);
-    if (p.qty != null) { cell.qty += p.qty; cell.aS += (p.avgSales || 0); cell.aO += (p.avgOrders || 0); }
+    if (p.qty != null) { cell.qty += p.qty; cell.aS += (p.salesRate || 0); cell.aO += (p.ordersRate || 0); }
   });
   const metricOf = (cell) => metric === 'value' ? cell.value
     : metric === 'coverSales' ? (cell.aS > 0 ? cell.qty / cell.aS : null)
@@ -863,8 +875,8 @@ function openProduct(code) {
       <div class="m"><div class="l">Үнийн дүн (өртөг)</div><div class="v">${e.value == null ? '—' : moneyShort(e.value)}</div></div>
       <div class="m"><div class="l">Нөөц хоног (борлуулалт)</div><div class="v">${fmtDays(e.coverSales)}</div></div>
       <div class="m"><div class="l">Нөөц хоног (зах.)</div><div class="v">${fmtDays(e.coverOrders)}</div></div>
-      <div class="m"><div class="l">Өдрийн дундаж борлуулалт</div><div class="v">${p.avgSales ? p.avgSales.toFixed(1) : '—'}</div></div>
-      <div class="m"><div class="l">Өдрийн дундаж захиалга</div><div class="v">${p.avgOrders ? p.avgOrders.toFixed(1) : '—'}</div></div>
+      <div class="m"><div class="l">Өдрийн дундаж борлуулалт</div><div class="v">${e.salesRate ? e.salesRate.toFixed(1) : '—'}</div></div>
+      <div class="m"><div class="l">Өдрийн дундаж захиалга</div><div class="v">${e.ordersRate ? e.ordersRate.toFixed(1) : '—'}</div></div>
       <div class="m"><div class="l">Өртөг үнэ</div><div class="v">${money(p.price)}</div></div>
       <div class="m"><div class="l">Худалдах үнэ</div><div class="v">${p.sellPrice ? money(p.sellPrice) : '—'}</div></div>
       ${p.salesPeriodQty ? `<div class="m"><div class="l">Жижиглэн борл. (нийт)</div><div class="v">${fmtInt(p.salesPeriodQty)} ш</div></div>` : ''}
