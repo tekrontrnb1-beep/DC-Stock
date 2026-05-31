@@ -18,7 +18,7 @@ function emptyDB() {
 /* ---------- UI state ---------- */
 const S = {
   selDate: null,
-  dept: '', cls: '', status: '', status2: '', search: '',
+  dept: '', cls: '', status: '', status2: '', search: '', lowOnly: false,
   sortKey: 'value', sortDir: -1,
   histScope: '__all__', histMetric: 'balance', histRange: 30,
   matrixMetric: 'value', // 'value' | 'coverSales' | 'coverOrders'
@@ -546,7 +546,7 @@ function renderFilters() {
   // date
   const dateOpts = [...IX.dates].reverse().map(d => ({ value: d, label: fmtDateFull(d) + (d === IX.dates[IX.dates.length - 1] ? ' — хамгийн сүүлийн' : '') }));
   fillSelect($('f-date'), dateOpts, S.selDate, null);
-  fillSelect($('f-dept'), IX.departments.map(d => ({ value: d, label: d })), S.dept, 'Бүх хэлтэс');
+  fillSelect($('f-dept'), IX.departments.map(d => ({ value: d, label: d })), S.dept, 'Бүх Department');
   fillSelect($('f-class'), IX.classes.map(c => ({ value: c, label: c })), S.cls, 'Бүх ангилал');
   fillSelect($('f-status'), IX.statuses.map(s => ({ value: s, label: s })), S.status, 'Бүх төлөв');
   fillSelect($('f-status2'), IX.statuses2.map(s => ({ value: s, label: s })), S.status2, 'Бүх төлөв');
@@ -564,13 +564,12 @@ function renderKPIs() {
   const avgCover = totalAvgSales > 0 ? totalQty / totalAvgSales : null;
   const low = list.filter(p => p.low).length;
   const zero = list.filter(p => p.qty === 0).length;
-  // sales/orders are daily flows that may end earlier than the balance date —
-  // show the latest available day on or before the selected date.
-  const sDate = latestWith(IX.salesDates, S.selDate);
+  // Салбарын захиалга — өдрийн урсгал (сүүлийн боломжит өдрөөр). Борлуулалт — жижиглэн Sales.csv нийт.
   const oDate = latestWith(IX.orderDates, S.selDate);
-  let todaySales = 0, todaySalesAmt = 0, todayOrders = 0, todayOrdersAmt = 0;
-  if (sDate) for (const p of list) { const s = salesOn(p.code, sDate); todaySales += s.qty; todaySalesAmt += s.amount; }
+  let todayOrders = 0, todayOrdersAmt = 0;
   if (oDate) for (const p of list) { const o = ordersOn(p.code, oDate); todayOrders += o.qty; todayOrdersAmt += o.amount; }
+  const retailTotal = list.reduce((s, p) => s + (p.salesPeriodQty || 0), 0);
+  const retailPeriod = (DB.meta && DB.meta.retailPeriod) ? DB.meta.retailPeriod : 'жижиглэн нийт';
 
   const deltaHtml = (d) => {
     if (!d) return '<span style="color:var(--text-3)">өөрчлөлтгүй</span>';
@@ -579,20 +578,26 @@ function renderKPIs() {
   };
 
   const cards = [
-    { cls: 'violet', label: '📦 Нийт бараа', value: fmtInt(list.length), sub: `${IX.departments.length} хэлтэс` },
+    { cls: 'violet', label: '📦 Нийт бараа', value: fmtInt(list.length), sub: `${IX.departments.length} Department` },
     { cls: '', label: '🧮 Өнөөдрийн нийт үлдэгдэл', value: fmtInt(totalQty) + ' ш', sub: `${fmtInt(withQty.length)} нэр төрөл` },
     { cls: 'green', label: '💰 Нөөцийн үнэ (өртөг)', value: moneyShort(totalVal), sub: deltaHtml(valDelta) },
-    { cls: 'violet', label: '⏳ Дундаж нөөц хоног', value: avgCover == null ? '—' : fmtDays(avgCover) + ' хоног', sub: 'борлуулалтаар (жигнэсэн)' },
-    { cls: low ? 'red' : 'green', label: '⚠️ Анхаарах бараа', value: fmtInt(low), sub: `${fmtInt(zero)} нь дууссан (0)` },
-    { cls: 'amber', label: '🛒 Гаралт (борлуулалт)', value: fmtInt(todaySales) + ' ш', sub: sDate ? `${fmtDate(sDate)} · ${moneyShort(todaySalesAmt)}` : 'мэдээлэл алга' },
+    { cls: 'violet', label: '⏳ Дундаж нөөц хоног', value: avgCover == null ? '—' : fmtDays(avgCover) + ' хоног', sub: 'гаралтаар (жигнэсэн)' },
+    { cls: low ? 'red' : 'green', key: 'low', label: '⚠️ Анхаарах бараа', value: fmtInt(low), sub: `${fmtInt(zero)} нь дууссан · харах →` },
+    { cls: 'amber', label: '🛒 Борлуулалт (нийт)', value: fmtInt(retailTotal) + ' ш', sub: `жижиглэн · ${esc(retailPeriod)}` },
     { cls: '', label: '📋 Салбарын захиалга', value: fmtInt(todayOrders) + ' ш', sub: oDate ? `${fmtDate(oDate)} · ${moneyShort(todayOrdersAmt)}` : 'мэдээлэл алга' },
   ];
   $('kpis').innerHTML = cards.map(c => `
-    <div class="kpi ${c.cls}">
+    <div class="kpi ${c.cls}${c.key === 'low' ? ' clickable' + (S.lowOnly ? ' active' : '') : ''}"${c.key ? ` data-kpi="${c.key}"` : ''}>
       <div class="kpi-label">${c.label}</div>
       <div class="kpi-value">${c.value}</div>
       <div class="kpi-sub">${c.sub}</div>
     </div>`).join('');
+  const lowCard = $('kpis').querySelector('[data-kpi="low"]');
+  if (lowCard) lowCard.onclick = () => {
+    S.lowOnly = !S.lowOnly;
+    render();
+    if (S.lowOnly) document.querySelector('#prod-table').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
 }
 
 function renderMatrix() {
@@ -690,7 +695,7 @@ function renderDepartments() {
 
 function renderHistScope() {
   const opts = [{ value: '__all__', label: 'Нийт (бүх бараа)' }]
-    .concat(IX.departments.map(d => ({ value: 'dept:' + d, label: 'Хэлтэс: ' + d })));
+    .concat(IX.departments.map(d => ({ value: 'dept:' + d, label: 'Department: ' + d })));
   // keep current selection if still valid
   if (!opts.some(o => o.value === S.histScope)) S.histScope = '__all__';
   fillSelect($('hist-scope'), opts, S.histScope, null);
@@ -771,6 +776,7 @@ function clsChip(cls) {
 
 function renderTable() {
   let list = filteredProducts().map(enrich);
+  if (S.lowOnly) list = list.filter(p => p.low);
   const k = S.sortKey, dir = S.sortDir;
   list.sort((a, b) => {
     let va = a[k], vb = b[k];
@@ -830,22 +836,22 @@ function openProduct(code) {
     <div class="pd-meta">
       <div class="m"><div class="l">Өнөөдрийн үлдэгдэл</div><div class="v">${e.qty == null ? '—' : fmtInt(e.qty) + ' ' + esc(p.unit)}</div></div>
       <div class="m"><div class="l">Үнийн дүн (өртөг)</div><div class="v">${e.value == null ? '—' : moneyShort(e.value)}</div></div>
-      <div class="m"><div class="l">Нөөц хоног (борл.)</div><div class="v">${fmtDays(e.coverSales)}</div></div>
+      <div class="m"><div class="l">Нөөц хоног (гаралт)</div><div class="v">${fmtDays(e.coverSales)}</div></div>
       <div class="m"><div class="l">Нөөц хоног (зах.)</div><div class="v">${fmtDays(e.coverOrders)}</div></div>
-      <div class="m"><div class="l">Өдрийн дундаж борл.</div><div class="v">${p.avgSales ? p.avgSales.toFixed(1) : '—'}</div></div>
+      <div class="m"><div class="l">Өдрийн дундаж гаралт</div><div class="v">${p.avgSales ? p.avgSales.toFixed(1) : '—'}</div></div>
       <div class="m"><div class="l">Өдрийн дундаж захиалга</div><div class="v">${p.avgOrders ? p.avgOrders.toFixed(1) : '—'}</div></div>
       <div class="m"><div class="l">Өртөг үнэ</div><div class="v">${money(p.price)}</div></div>
       <div class="m"><div class="l">Худалдах үнэ</div><div class="v">${p.sellPrice ? money(p.sellPrice) : '—'}</div></div>
       ${p.salesPeriodQty ? `<div class="m"><div class="l">Жижиглэн борл. (нийт)</div><div class="v">${fmtInt(p.salesPeriodQty)} ш</div></div>` : ''}
     </div>
     <div class="pd-chart"><canvas id="pd-canvas"></canvas></div>
-    <div class="hint" style="text-align:center">Сүүлийн ${dates.length} өдрийн үлдэгдэл ба гаралт (борлуулалт)</div>`;
+    <div class="hint" style="text-align:center">Сүүлийн ${dates.length} өдрийн үлдэгдэл ба салбарын захиалга</div>`;
   showOverlay();
   const balSeries = dates.map(dt => { const q = balanceAsOf(code, dt); return q == null ? null : q; });
-  const salesSeries = dates.map(dt => salesOn(code, dt).qty);
+  const orderSeries = dates.map(dt => ordersOn(code, dt).qty);
   drawLine($('pd-canvas'), dates.map(fmtDate), [
     { label: 'Үлдэгдэл', data: balSeries, color: '#2563eb', fill: true },
-    { label: 'Борлуулалт', data: salesSeries, color: '#d97706', fill: false },
+    { label: 'Захиалга', data: orderSeries, color: '#d97706', fill: false },
   ], h => h);
 }
 
@@ -986,7 +992,7 @@ function wire() {
   $('f-status2').onchange = (e) => { S.status2 = e.target.value; render(); };
   let searchTimer = null;
   $('f-search').oninput = (e) => { S.search = e.target.value; clearTimeout(searchTimer); searchTimer = setTimeout(render, 180); };
-  $('f-reset').onclick = () => { S.dept = S.cls = S.status = S.status2 = S.search = ''; if (IX.dates.length) S.selDate = IX.dates[IX.dates.length - 1]; render(); };
+  $('f-reset').onclick = () => { S.dept = S.cls = S.status = S.status2 = S.search = ''; S.lowOnly = false; if (IX.dates.length) S.selDate = IX.dates[IX.dates.length - 1]; render(); };
 
   $('hist-scope').onchange = (e) => { S.histScope = e.target.value; renderHistory(); };
   $('hist-range').onchange = (e) => { S.histRange = +e.target.value; renderHistory(); };

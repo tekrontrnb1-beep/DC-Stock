@@ -38,7 +38,7 @@
       <select id="f-date"></select>
     </div>
     <div class="field">
-      <label>Хэлтэс</label>
+      <label>Department</label>
       <select id="f-dept"><option value="">Бүгд</option></select>
     </div>
     <div class="field">
@@ -71,7 +71,7 @@
           <h2>ABC / XYZ — 9 ангилал</h2>
           <div class="seg" id="matrix-metric">
             <button class="seg-btn active" data-v="value">Үнэ</button>
-            <button class="seg-btn" data-v="coverSales">Нөөц хоног (борл.)</button>
+            <button class="seg-btn" data-v="coverSales">Нөөц хоног (гаралт)</button>
             <button class="seg-btn" data-v="coverOrders">Нөөц (зах.)</button>
           </div>
         </div>
@@ -86,7 +86,7 @@
       <!-- Departments -->
       <section class="card">
         <div class="card-head">
-          <h2>Хэлтсийн үлдэгдэл</h2>
+          <h2>Department-ийн үлдэгдэл</h2>
           <span class="hint" id="dept-hint"></span>
         </div>
         <div class="dept-list" id="dept-list"></div>
@@ -101,7 +101,6 @@
           <select id="hist-scope" title="Юуны түүх"></select>
           <div class="seg" id="hist-metric">
             <button class="seg-btn active" data-v="balance">Үлдэгдэл</button>
-            <button class="seg-btn" data-v="sales">Борлуулалт</button>
             <button class="seg-btn" data-v="orders">Захиалга</button>
           </div>
           <select id="hist-range" title="Хугацаа">
@@ -127,14 +126,14 @@
             <tr>
               <th data-sort="code">Код</th>
               <th data-sort="name">Нэр</th>
-              <th data-sort="department">Хэлтэс</th>
+              <th data-sort="department">Department</th>
               <th data-sort="cls" class="center">ABC/XYZ</th>
               <th data-sort="status">Нийлүүл. төлөв</th>
               <th data-sort="status2">Захих төлөв</th>
               <th data-sort="qty" class="num">Өнөөдрийн үлдэгдэл</th>
               <th data-sort="delta" class="num">Өчигдрөөс</th>
               <th data-sort="value" class="num">Үнийн дүн (өртөг)</th>
-              <th data-sort="coverSales" class="num">Нөөц хоног (борл.)</th>
+              <th data-sort="coverSales" class="num">Нөөц хоног (гаралт)</th>
               <th data-sort="coverOrders" class="num">Нөөц хоног (зах.)</th>
             </tr>
           </thead>

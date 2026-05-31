@@ -191,8 +191,11 @@ for rp in sales_files:
         for row in r:
             if len(row) < 3: continue
             retail[bc(row[0])] = retail.get(bc(row[0]), 0.0) + numf(row[2])
+retail_period = ''
 if sales_files:
-    print('· retail sales files:', [os.path.basename(f) for f in sales_files], 'items:', len(retail))
+    pm = re.search(r'(\d{1,2}\.\d{1,2})\s*-\s*(\d{1,2}\.\d{1,2})', ' '.join(os.path.basename(f) for f in sales_files))
+    if pm: retail_period = pm.group(1) + '–' + pm.group(2)
+    print('· retail sales files:', [os.path.basename(f) for f in sales_files], 'items:', len(retail), 'period:', retail_period)
 
 # ---------------- BUILD PRODUCTS (universe = balance-having AND registered in V9001) ----------------
 # Үлдэгдэл файл олон агуулахын бараа агуулдаг тул V9001-д (9001 master) бүртгэлтэйг нь л үлдээнэ.
@@ -238,11 +241,11 @@ print('   - matched 9001 stat:', ms, '(%.0f%%)' % (100 * ms / max(1, len(product
 print('  balances:', len(balances), ' sales(outbound):', len(sales), ' orders:', len(orders))
 
 DB = {
-    'products': products, 'balances': balances, 'sales': sales, 'orders': orders,
+    'products': products, 'balances': balances, 'sales': [], 'orders': orders,
     'updatedAt': UPDATED,
     'meta': {'source': 'DC-Stock ETL', 'value': 'cost (Өртөг үнэ)',
-             'salesMeaning': 'outbound (DC → салбар)', 'universe': 'balance-only',
-             'balanceDates': bal_dates},
+             'sales': 'retail (Sales.csv, period total per item)', 'universe': 'V9001 + balance',
+             'retailPeriod': retail_period, 'balanceDates': bal_dates},
 }
 
 # ---------------- WRITE plaintext + encrypted ----------------

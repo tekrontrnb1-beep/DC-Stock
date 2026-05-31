@@ -128,6 +128,10 @@ select, input { font-family: inherit; font-size: 14px; }
 .kpi-sub { font-size: 12px; color: var(--text-3); margin-top: 3px; }
 .kpi-sub .up { color: var(--green); font-weight: 700; }
 .kpi-sub .down { color: var(--red); font-weight: 700; }
+.kpi.clickable { cursor: pointer; transition: transform .08s, box-shadow .15s; }
+.kpi.clickable:hover { transform: translateY(-2px); box-shadow: var(--shadow-lg); }
+.kpi.active { box-shadow: 0 0 0 2px var(--red); }
+.kpi.active .kpi-sub { color: var(--red); font-weight: 700; }
 
 /* ---------- ABC/XYZ matrix ---------- */
 .matrix { display: grid; grid-template-columns: 42px 1fr 1fr 1fr; gap: 8px; }

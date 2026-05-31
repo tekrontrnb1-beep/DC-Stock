@@ -13,3 +13,6 @@ import/
 
 # Plaintext data — local working copy only. Publish the encrypted .enc instead.
 data/stock-data.json
+
+# Secrets — never commit (local only)
+token.txt
